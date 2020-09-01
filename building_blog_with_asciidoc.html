@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<!--[if IE]><meta http-equiv="X-UA-Compatible" content="IE=edge"><![endif]-->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="generator" content="Asciidoctor 1.5.3">
+<title>Building a blog with AsciiDoc</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:300,300italic,400,400italic,600,600italic%7CNoto+Serif:400,400italic,700,700italic%7CDroid+Sans+Mono:400,700">
+<link rel="stylesheet" href="./asciidoctor.css">
+<link rel="stylesheet" href="./coderay-asciidoctor.css">
+</head>
+<body class="article">
+<div id="header">
+<h1>Building a blog with AsciiDoc</h1>
+</div>
+<div id="content">
+<div class="sect1">
+<h2 id="_introduction">Introduction</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Given that we at millross have to write different kinds of documentation, it seems
+less than ideal to write our blog in one markup language
+(<a href="http://daringfireball.net/projects/markdown/">MarkDown</a>), but other technical
+documentation in AsciiDoc, so we thought we&#8217;d look at writing our own blog in
+<a href="http://asciidoctor.org/docs/what-is-asciidoc/">AsciiDoc</a> and generating HTML ready
+for upload. This is how we went about it: it may not be the perfect (or even the
+best) approach, but it&#8217;s how we got this blog up and running.</p>
+</div>
+<div class="paragraph">
+<p><a href="http://asciidoctor.org/docs/what-is-asciidoc/">AsciiDoc</a> is a simple and powerful
+lightweight markup language for authoring of all kinds - whether technical
+documentation such as that hosted at <a href="http://spring.io/docs">the Spring
+documentation site</a>, notes, books/ebooks, slide decks, web pages/blogs etc. While
+<a href="http://daringfireball.net/projects/markdown/">Markdown</a> is also lightweight, I&#8217;d
+say that AsciiDoc is far more of a universal tool for all kinds of writing.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_getting_asciidoctor">Getting AsciiDoctor</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>If you&#8217;re going to write your blog in AsciiDoc, you will need the tools to convert
+your AsciiDoc markup into HTML. For this we chose <a href="http://asciidoctor.org/">AsciiDoctor</a>,
+which you can install by following <a href="http://asciidoctor.org/">the instructions available
+on this page</a>.</p>
+</div>
+<div class="paragraph">
+<p>Since we already have Ruby installed, we chose the "gem install method".</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_our_first_blog_page_and_home_page">Our first blog page and home page</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>So now let&#8217;s create our first - trivial blog post. Pick your favourite text editor -
+remember AsciiDoc is all about concentrating on content rather than formatting, and
+copy and paste the following block into it:-</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="asciidoc">= Our first blog post
+
+Now a short paragraph to represent a summary or abstract of our blog post, which we'll
+use later for our blog post list page.
+
+== And now the first real section of the blog post
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec quis pharetra mauris,
+at faucibus libero. Nunc at fermentum tortor, at congue purus. Ut nec tempus quam,
+nec rutrum orci. Donec at imperdiet odio. Cras non nisi tempus, accumsan lectus at,
+rutrum ante. Nulla auctor felis a diam gravida mollis. In efficitur neque quis diam
+rutrum, maximus iaculis lectus sagittis. Proin quis hendrerit risus, id congue diam.
+Vivamus ultricies quam erat, sed molestie nunc tempus vel. Vivamus sollicitudin, arcu
+ut euismod placerat, odio tellus accumsan augue, nec pulvinar tortor nulla ac ligula.
+Sed ullamcorper mattis faucibus. Vivamus in justo a eros eleifend malesuada. Suspendisse
+quis consectetur tortor. Quisque orci leo, euismod in quam id, iaculis euismod nulla.
+Aliquam vel purus sed nunc tempor volutpat. Integer diam erat, euismod eu faucibus sed,
+finibus eget risus.
+
+Nulla nec massa lectus. Nulla vel consequat neque, nec varius dolor. Vivamus tincidunt
+nunc felis, at tempus libero pretium a. Pellentesque vel elit et nibh congue fringilla
+vel at leo. Vivamus nibh eros, condimentum eget urna scelerisque, rutrum euismod sem.
+Maecenas odio elit, elementum at erat nec, aliquet iaculis massa. Interdum et malesuada
+fames ac ante ipsum primis in faucibus. Phasellus finibus lacus augue, sed hendrerit
+rci malesuada eu. Morbi et iaculis nibh. Maecenas magna turpis, cursus ut fringilla non,
+lobortis vel eros.
+
+Ut et congue dolor, quis pretium urna. Pellentesque quis nulla tempus, sollicitudin
+massa et, scelerisque mauris. Pellentesque sagittis mauris ac ullamcorper vulputate.
+Curabitur eleifend non arcu sit amet efficitur. Fusce suscipit augue id turpis accumsan,
+nec mattis nulla aliquet. Proin convallis ipsum lorem, non aliquam dui porta a. Nullam
+sed aliquet orci, eu mattis nibh. Cras et felis vitae tortor tempus pellentesque dictum
+sed erat. Morbi in justo nisl. Phasellus mauris sapien, posuere nec velit et, pellentesque
+rutrum eros. Maecenas dui dolor, fringilla vitae lacus in, gravida laoreet elit. Etiam
+finibus leo at iaculis imperdiet.</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now save this file as blogpost1.adoc, this is our first notional blog post, which we will
+make a few changes to later, this is just to demonstrate how easy it is to process.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_conversion_to_html">Conversion to HTML</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Now we have our initial blog post in AsciiDoc format, the next stage is to convert it to
+an HTML file. While you can make it dependent on external CSS (we will revisit it later)
+for now let&#8217;s use the default styles/formatting, which are pretty nice.</p>
+</div>
+<div class="paragraph">
+<p>I suggest writing the output html files into a separate directory to your source files -
+create a subdirectory called web (to hold your generated HTML files).</p>
+</div>
+<div class="paragraph">
+<p>Issue the command</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>asciidoctor --destination-dir web *.adoc</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>If you now list the contents of the "web" directory, you should see a file called
+blogpost1.html. Open this in a browser and you should see a nicely formatted HTML
+version of the text we put into that file. It&#8217;s that easy to take the AsciiDoc
+markup and turn it into a nice-looking blog.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_syntax_highlighting_in_your_favourite_editor">Syntax Highlighting in your favourite editor</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>There is widespread editor support for <a href="http://asciidoctor.org/docs/user-manual/#text-editor">syntax
+highlighting</a> for AsciiDoc files. We use vim for editing our adoc files, so we basically adapted the
+instructions found <a href="http://asciidoc.org/userguide.html#_vim_syntax_highlighter">here</a> to configure
+vim to display with highlighting.</p>
+</div>
+<div class="paragraph">
+<p>The reason I write "adapted" is because we use <a href="https://github.com/tpope/vim-pathogen">pathogen</a> to
+manage our vim syntax plugins, and autoloading, so although we use the syntax file recommended
+for AsciiDoc, we actually installed the syntax support by cloning
+<a href="https://github.com/gnperdue/vim-asciidoc">gnperdue&#8217;s asciidoc for vim pathoten</a> repository which, used
+with pathogen, works immediately.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_creating_a_blog_post_list_for_the_index">Creating a blog post list for the index</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>So now we have a simple blog post. What remains is to generate a blog post list to act as an entry
+point for the blog, most recent blogs first. The format we intend to adopt is the blog post title,
+linked to the actual blog post file, then a display of the summary/abstract paragraph we defined
+earlier, and then a "See more" link, which again links to the actual blog post file.</p>
+</div>
+<div class="paragraph">
+<p>For now we&#8217;ve made this a manual process at millross, but the intent is that it should be possible
+to automate this (we simply haven&#8217;t looked at doing so yet, as the additional work per post is
+relatively small).</p>
+</div>
+<div class="paragraph">
+<p>To include the summary, we&#8217;ll use the magic of
+<a href="http://asciidoctor.org/docs/user-manual/#include-directive">AsciiDoc inclusion from other source files</a>.
+By using <a href="http://asciidoctor.org/docs/user-manual/#selecting-parts-of-a-document-to-include">Tagged
+regions</a> it&#8217;s possible to include just a subset of a given blog post file (in this case the summary)
+tags, it&#8217;s possible to only include a subsection from another file.</p>
+</div>
+<div class="paragraph">
+<p>So first let&#8217;s open up <code>blogpost1.adoc</code> and tag the summary section. The <code>//</code> character combination in
+AsciiDoc represents a comment and tags should be identified with this character, so add a comment
+above the "short paragraph to represent a summary" - <code>// tag::summary[]</code> and then immediately after
+that paragraph another comment to close the tag - <code>// end:summary[]</code>.</p>
+</div>
+<div class="paragraph">
+<p>Now save <code>blogpost1.adoc</code> again, now we need to create our blog list.</p>
+</div>
+<div class="paragraph">
+<p>Open a new file in your favourite text editor, this will be our blog list file.
+Enter the following text into the editor</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="asciidoc">= My Blog
+Fred Bloggs &lt;fred@example.com&gt;
+
+=== Our first blog post
+*2014-09-05* +
+include::blogpost1.adoc[tags=summary]
+link:blogpost1.html[Read more]</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>(Note you will need to insert your own date - I haven&#8217;t yet found a mechanism within AsciiDoctor for
+extracting attributes from other files, which is what I really want to do, creation of a pre-
+processor to generate this index should resolve this.)</p>
+</div>
+<div class="paragraph">
+<p>Save this as <code>blog_list.adoc</code>, then re-run the command to generate the html</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>asciidoctor --destination-dir web *.adoc</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now open <code>blog_list.html</code> from the web subdirectory in your browser and you should see the summary
+of your first blog entry in there, along with the date of writing and a "Read more" link which will
+take you to the actual blog entry.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_automate_automate_automate">Automate, automate, automate</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Finally, anticipating future work with the styles for the HTML we generate, I would recommend saving
+the generation of html command into a shell script/batch file so that you can add additional
+processing/preprocessing later.</p>
+</div>
+</div>
+</div>
+</div>
+<div id="footer">
+<div id="footer-text">
+Last updated 2020-09-01 18:00:14 UTC
+</div>
+</div>
+</body>
+</html>

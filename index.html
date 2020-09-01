@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<!--[if IE]><meta http-equiv="X-UA-Compatible" content="IE=edge"><![endif]-->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="generator" content="Asciidoctor 1.5.3">
+<meta name="author" content="Jeremy Prime">
+<title>Millross Consultants Blog</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:300,300italic,400,400italic,600,600italic%7CNoto+Serif:400,400italic,700,700italic%7CDroid+Sans+Mono:400,700">
+<link rel="stylesheet" href="./asciidoctor.css">
+<link rel="stylesheet" href="./coderay-asciidoctor.css">
+</head>
+<body class="article">
+<div id="header">
+<h1>Millross Consultants Blog</h1>
+<div class="details">
+<span id="author" class="author">Jeremy Prime</span><br>
+<span id="email" class="email"><a href="mailto:jeremy.prime@millross-consultants.com">jeremy.prime@millross-consultants.com</a></span><br>
+</div>
+</div>
+<div id="content">
+<div class="sect1">
+<h2 id="_about_this_blog">About this blog</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Millross Consultants is a small independent software development consultancy, focused mainly on JVM development, agile
+processes and architecture (both monolithic and SOA/microservices).</p>
+</div>
+<div class="paragraph">
+<p>The blog is a way of sharing things we&#8217;ve learned with our colleagues, clients, and potential clients. If you have
+further questions regarding anything you read on the blog, please contact Jeremy Prime (at the address above). It&#8217;s
+possible, though far from certain, that he will be able to help.</p>
+</div>
+<div class="sect2">
+<h3 id="_error_propagation_in_completablefuture_completionstage_pipelines">Error propagation in CompletableFuture/CompletionStage pipelines</h3>
+<div class="paragraph">
+<p><strong>2017-10-25</strong>
+In my <a href="completion-stage-future-introduction.html">previous post</a> on the subject of CompletableFutures and CompletionStages, I gave a brief introduction to the concepts. I also focused primarily on non-exceptional completion of futures, despite the fact that the original driver for writing the posts was because I&#8217;d been learning about exceptional behaviours in CompletionStage pipelines.</p>
+</div>
+<div class="paragraph">
+<p>The primary reason for the previous post was because it was hard to cover exceptional behaviours without providing a simple introduction and building some kind of representation (in this case graphical) of the elements of such a pipeline.</p>
+</div>
+<div class="paragraph">
+<p>This post moves on from that to discuss exceptional behaviours (what happens when a CompletionStage fails), and extends that graphical represention. Again, the basis for the information provided in this post is work I have been doing on the asynchronous version of the <a href="http://www.pac4j.org">pac4j</a> pac4j API and library, and settled on CompletableFutures as the way to represent the async API.
+<a href="completable-future-error-propagation.html">Read more</a></p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_introduction_to_completionstage_and_completablefuture">Introduction to CompletionStage and CompletableFuture</h3>
+<div class="paragraph">
+<p><strong>2017-02-26</strong>
+As mentioned previously I decided to expose the API for an async version of the pac4j API via the <a href="http://docs.oracle.com/javase/8/docs/api/java/util/concurrent/CompletableFuture.html">CompletableFuture</a> class, using this to wrap values which will be determined in the future.</p>
+</div>
+<div class="paragraph">
+<p>As this work progressed, I learned that some of my default assumptions regarding error propagation in CompletableFuture (strictly <a href="http://docs.oracle.com/javase/8/docs/api/java/util/concurrent/CompletionStage.html">CompletionStage</a>) pipelines is incorrect. I&#8217;ve decided to document these, along with some exception-handling patterns, but ran into the fact that to do so, I probably needed to write an introduction to CompletableFutures and the CompletionStage API they implement. This article is a basic (and quick) introduction to the CompletableFuture/CompletionStage API, and will lead into subsequent articles on error propagation in CompletionStage pipelines, and approaches to handling exceptions raised during the pipeline processing.
+<a href="completion-stage-future-introduction.html">Read more</a></p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_a_brief_introduction_to_the_vert_x_context_object">A Brief Introduction to the Vert.x Context Object</h3>
+<div class="paragraph">
+<p><strong>2017-01-22</strong>
+Recently I&#8217;ve been looking at the possibility of building an asynchronous version of the <a href="http://www.pac4j.org">pac4j</a>
+library, with a view to then migrating the <a href="https://github.com/pac4j/vertx-pac4j">vertx-pac4j</a> implementation to use the
+asynchronous version of pac4j by default.</p>
+</div>
+<div class="paragraph">
+<p>I&#8217;m keen (for obvious reasons) that the async version of pac4j is not tightly coupled to  one
+particular asynchronous/non-blocking framework, I decided to expose the API via the
+<a href="http://docs.oracle.com/javase/8/docs/api/java/util/concurrent/CompletableFuture.html">CompletableFuture</a> class, using
+this to wrap values which will be determined in the future. However, I opted to use the <a href="http://vertx.io">vert.x</a>
+framework for my asynchronous testing as a way of testing the API as it emerged. This in turn has led me to learn
+some aspects of the vert.x <a href="http://vertx.io/docs/apidocs/io/vertx/core/Context.html">Context</a> class which I didn&#8217;t really
+understand before.</p>
+</div>
+<div class="paragraph">
+<p>Liuwei Fire has kindly made a Chinese translation of this article available <a href="https://github.com/DaC1989/vertx-blog-translate/blob/master/简介%20Vert.x%20Context%20对象.md">here</a>.
+<a href="vertx_context_object.html">Read more</a></p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_automating_asciidoctor_with_maven">Automating AsciiDoctor With Maven</h3>
+<div class="paragraph">
+<p><strong>2016-05-16</strong>
+In the previous blog entry about AsciiDoctor, I recommended saving the generation command into a shell script or batch
+file to make it easy to add additional processing/pre-processing later.</p>
+</div>
+<div class="paragraph">
+<p>While at the time this seemed very straightforward, for those of us who want to generate documentation as part of a
+Java build, there&#8217;s a more convenient approach. There is a
+<a href="https://github.com/asciidoctor/asciidoctor-maven-plugin/">Maven plugin for AsciiDoctor</a> (Maven appears to have plugins
+for just about everything), making it easy to generate documentation from templates as part of a Maven build. This in
+turn can be  used in conjunction with other functionality provided by Maven (e.g. Maven resources plugin to move custom
+css  into an appropriate location ready for upload to a website) to make a more complete build script.
+<a href="automating_asciidoctor_using_maven.html">Read more</a></p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_building_a_blog_with_asciidoc">Building a Blog with AsciiDoc</h3>
+<div class="paragraph">
+<p><strong>2014-09-05</strong>
+Given that we at millross have to write different kinds of documentation, it seems
+less than ideal to write our blog in one markup language
+(<a href="http://daringfireball.net/projects/markdown/">MarkDown</a>), but other technical
+documentation in AsciiDoc, so we thought we&#8217;d look at writing our own blog in
+<a href="http://asciidoctor.org/docs/what-is-asciidoc/">AsciiDoc</a> and generating HTML ready
+for upload. This is how we went about it: it may not be the perfect (or even the
+best) approach, but it&#8217;s how we got this blog up and running.
+<a href="building_blog_with_asciidoc.html">Read more</a></p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div id="footer">
+<div id="footer-text">
+Last updated 2020-09-01 18:00:14 UTC
+</div>
+</div>
+</body>
+</html>

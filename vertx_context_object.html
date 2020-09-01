@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<!--[if IE]><meta http-equiv="X-UA-Compatible" content="IE=edge"><![endif]-->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="generator" content="Asciidoctor 1.5.3">
+<title>The Context object in Vert.x - a brief introduction</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:300,300italic,400,400italic,600,600italic%7CNoto+Serif:400,400italic,700,700italic%7CDroid+Sans+Mono:400,700">
+<link rel="stylesheet" href="./asciidoctor.css">
+<link rel="stylesheet" href="./coderay-asciidoctor.css">
+</head>
+<body class="article">
+<div id="header">
+<h1>The Context object in Vert.x - a brief introduction</h1>
+</div>
+<div id="content">
+<div class="sect1">
+<h2 id="_introduction">Introduction</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Recently I&#8217;ve been looking at the possibility of building an asynchronous version of the <a href="http://www.pac4j.org">pac4j</a>
+library, with a view to then migrating the <a href="https://github.com/pac4j/vertx-pac4j">vertx-pac4j</a> implementation to use the
+asynchronous version of pac4j by default.</p>
+</div>
+<div class="paragraph">
+<p>I&#8217;m keen (for obvious reasons) that the async version of pac4j is not tightly coupled to  one
+particular asynchronous/non-blocking framework, I decided to expose the API via the
+<a href="http://docs.oracle.com/javase/8/docs/api/java/util/concurrent/CompletableFuture.html">CompletableFuture</a> class, using
+this to wrap values which will be determined in the future. However, I opted to use the <a href="http://vertx.io">vert.x</a>
+framework for my asynchronous testing as a way of testing the API as it emerged. This in turn has led me to learn
+some aspects of the vert.x <a href="http://vertx.io/docs/apidocs/io/vertx/core/Context.html">Context</a> class which I didn&#8217;t really
+understand before.</p>
+</div>
+<div class="paragraph">
+<p>Liuwei Fire has kindly made a Chinese translation of this article available <a href="https://github.com/DaC1989/vertx-blog-translate/blob/master/简介%20Vert.x%20Context%20对象.md">here</a>.</p>
+</div>
+<div class="sect2">
+<h3 id="_notes">Notes</h3>
+<div class="paragraph">
+<p>The information presented relates to Vert.x version 3.3.3. It is conceivable that later versions of vert.x could
+render aspects of this article incorrect.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_introduction_to_the_context_class">Introduction to the Context class</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Whenever a vert.x <a href="http://vertx.io/docs/apidocs/io/vertx/core/Handler.html">Handler</a> is executed, or the start or step
+method of a verticle is called, then that execution is associated with a specific context. Generally a context is an
+event-loop context and is therefore associated with an event loop thread (exceptions are covered in the Further Reading
+referenced below).</p>
+</div>
+<div class="paragraph">
+<p>Contexts are propagated. When a handler is set by code running on a specific context, then that handler will also be
+executed on the same context.</p>
+</div>
+<div class="paragraph">
+<p>This means for example, that if the start method of a verticle instance sets a number of event bus handlers (as many
+do), then they will all run on the same context as the start method for that verticle (so all handlers for that
+verticle instance will share a common context).</p>
+</div>
+<div class="paragraph">
+<p>A schematic of the relationships between non-worker verticles, contexts and eventloop threads is shown in Figure 1.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="images/VertxContextRelationships.png" alt="VertxContextRelationships">
+</div>
+</div>
+<div class="paragraph">
+<p>Note that each verticle effectively has only one context for handlers created by its start method, and each context is
+bound to a single event-loop thread. A given event-loop thread can, however, have multiple contexts bound to it.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_when_are_contexts_not_propagated">When are contexts not propagated?</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>When a verticle&#8217;s start method is called, a new context is created. If 4 identical verticles are deployed via the
+instances parameter on DeploymentOptions, the start method of each will be on a new context. This is logical as we may
+not want all non-worker verticles to be bound to a single eventloop thread when multiple eventloop threads are
+available.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_threading_guarantees">Threading Guarantees</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>There are certain consequences of the propagation of contexts to handlers as mentioned above. The most important one is
+that since all handlers in a given eventloop verticle run on the same context (the one on which its start method ran),
+they all run on the same eventloop thread. This gives rise to the threading guarantee within vert.x, that as long as
+a given verticle is the only one to ever access a piece of state, then that state is being accessed by only one thread,
+so no synchronization will be necessary.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_exception_handling">Exception Handling</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Each context can have its own exception handler attached for handling exceptions which occur during event loop
+processing.</p>
+</div>
+<div class="sect2">
+<h3 id="_why_might_you_not_want_the_default_exception_handler">Why might you not want the default exception handler?</h3>
+<div class="paragraph">
+<p>As one example, you might have some verticles running whose job it is to monitor other verticles, and if something
+appears to go wrong with them, undeploy and restart them, a frequent pattern in an actor- or microservices- style
+archictecture. So one option could be that when a supervised verticle encounters an unrecoverable error, it could
+simply notify its supervisor that it has gone wrong via an eventbus message, and its supervisor could then undeploy
+and redeploy (and after a number of failures in rapid succession possibly give up hope or escalate to its own
+supervisor.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_going_off_context_and_getting_back_onto_a_particular_context">Going off-context and getting back onto a particular context</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>There are several reasons why you might execute code off-context and then want to operate back on a vert.x context when
+complete. I&#8217;ll outline a couple of scenarios below</p>
+</div>
+<div class="sect2">
+<h3 id="_running_code_on_a_separate_thread">Running code on a separate thread</h3>
+<div class="paragraph">
+<p>Firstly you might be using an asynchronous driver which is entirely vertx-unaware. Its code will run on non-eventloop
+threads but it&#8217;s possible you may then want to use the results of that code to update information within your verticle.
+If you don&#8217;t get back onto the correct context, you can&#8217;t make any guarantees about thread-safety, so your subsequent
+processing needs to be run back on the correct eventloop thread.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_using_asynchronous_java_8_apis">Using asynchronous Java 8 APIs</h3>
+<div class="paragraph">
+<p>APIs such as CompletableFuture are context-unaware. In one example, I created an already completed future on the vert.x
+event loop in a test. I then attached subsequent processing to it via thenRun:-</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="java"><span class="annotation">@RunWith</span>(VertxUnitRunner.class)
+<span class="directive">public</span> <span class="type">class</span> <span class="class">ImmediateCompletionTest</span> {
+    <span class="annotation">@Rule</span>
+    <span class="directive">public</span> <span class="directive">final</span> RunTestOnContext rule = <span class="keyword">new</span> RunTestOnContext();
+
+    <span class="annotation">@Test</span>
+    <span class="directive">public</span> <span class="type">void</span> testImmediateCompletion(TestContext context) {
+
+        <span class="directive">final</span> Async async = context.async();
+        <span class="directive">final</span> Vertx vertx = rule.vertx();
+        <span class="directive">final</span> CompletableFuture&lt;<span class="predefined-type">Integer</span>&gt; toComplete = <span class="keyword">new</span> CompletableFuture&lt;&gt;();
+        <span class="comment">// delay future completion by 500 ms</span>
+        <span class="directive">final</span> <span class="predefined-type">String</span> threadName = <span class="predefined-type">Thread</span>.currentThread().getName();
+        toComplete.complete(<span class="integer">100</span>);
+        toComplete.thenRun(() -&gt; {
+            assertThat(<span class="predefined-type">Thread</span>.currentThread().getName(), is(threadName));
+            async.complete();
+        });
+    }
+
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Naively one might expect this to automatically run on the context, since it hasn&#8217;t left the eventloop thread on which
+the future was completed, and indeed it&#8217;s provable that it is on the correct thread. However, it will not be on the
+correct context. This would mean that it wouldn&#8217;t, for example, invoke any modified exception handler attached to the
+context.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_getting_back_on_context">Getting back on context</h3>
+<div class="paragraph">
+<p>Fortunately, once we&#8217;ve left the context, it&#8217;s quite straightforward to return to it. Prior to definition of the code
+block within thenRun, we can use Vertx.currentContext() or vertx.getOrCreateContext() to get a handle to the context on
+which our eventloop code is running, We can then execute the code block inside a call to Context::runOnContext,
+similar to</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="java">        <span class="directive">final</span> <span class="predefined-type">Context</span> currentContext = vertx.getOrCreateContext();
+        toComplete.thenRun(() -&gt; {
+                currentContext.runOnContext(v -&gt; {
+                assertThat(<span class="predefined-type">Thread</span>.currentThread().getName(), is(threadName));
+                async.complete();
+            }
+        });</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>While getting back onto the correct context may not be critical if you have remained on the event loop thread
+throughout, it is critical if you are going to invoke subsequent vert.x handlers, update verticle state or anything
+similar, so it&#8217;s a sensible general approach.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_further_reading">Further Reading</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The vert.x team themselves offer an excellent blog about the Vert.x eventloop, with excellent material on the context,
+on <a href="https://github.com/vietj/vertx-materials/blob/master/src/main/asciidoc/Demystifying_the_event_loop.adoc">Github</a>.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_thanks">Thanks</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Thanks very much to the vert.x core team for their clear github pages on the eventloop, and also to
+<a href="https://twitter.com/alexlehm?lang=en">Alexander Lehmann</a> for his answers to my stupid and naive questions on the
+<a href="https://groups.google.com/forum/#!forum/vertx">Vert.x google group</a>.</p>
+</div>
+</div>
+</div>
+</div>
+<div id="footer">
+<div id="footer-text">
+Last updated 2020-09-01 18:00:14 UTC
+</div>
+</div>
+</body>
+</html>

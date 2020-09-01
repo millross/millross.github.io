@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<!--[if IE]><meta http-equiv="X-UA-Compatible" content="IE=edge"><![endif]-->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="generator" content="Asciidoctor 1.5.3">
+<title>Introduction to CompletionStage and CompletableFuture</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:300,300italic,400,400italic,600,600italic%7CNoto+Serif:400,400italic,700,700italic%7CDroid+Sans+Mono:400,700">
+<link rel="stylesheet" href="./asciidoctor.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.4.0/css/font-awesome.min.css">
+<link rel="stylesheet" href="./coderay-asciidoctor.css">
+</head>
+<body class="article">
+<div id="header">
+<h1>Introduction to CompletionStage and CompletableFuture</h1>
+</div>
+<div id="content">
+<div class="sect1">
+<h2 id="_introduction">Introduction</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>As mentioned previously I decided to expose the API for an async version of the pac4j API via the <a href="http://docs.oracle.com/javase/8/docs/api/java/util/concurrent/CompletableFuture.html">CompletableFuture</a> class, using this to wrap values which will be determined in the future.</p>
+</div>
+<div class="paragraph">
+<p>As this work progressed, I learned that some of my default assumptions regarding error propagation in CompletableFuture (strictly <a href="http://docs.oracle.com/javase/8/docs/api/java/util/concurrent/CompletionStage.html">CompletionStage</a>) pipelines is incorrect. I&#8217;ve decided to document these, along with some exception-handling patterns, but ran into the fact that to do so, I probably needed to write an introduction to CompletableFutures and the CompletionStage API they implement. This article is a basic (and quick) introduction to the CompletableFuture/CompletionStage API, and will lead into subsequent articles on error propagation in CompletionStage pipelines, and approaches to handling exceptions raised during the pipeline processing.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_the_completionstage_interface_and_completablefuture_implementation">The CompletionStage interface and CompletableFuture implementation</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>CompletableFuture implements the CompletionStage interface. A CompletionStage represents a computation which can be a stage in a larger computation (hence the name). This means that, given a CompletionStage which will evaluate to a result, a computational pipeline can be assembled by applying further operations to that result.</p>
+</div>
+<div class="paragraph">
+<p>To make this a little more concrete (the paragraph above seems very abstract), let&#8217;s talk specifically about CompletableFutures. The CompletableFuture class is strictly a CompletionStage implementation dealing with an asynchronous computation  which will complete and provide a value at some unspecified time. For those who have encountered, for example, promises, or Scala Futures this will sound quite familiar.</p>
+</div>
+<div class="paragraph">
+<p>CompletionStages offer methods for taking one CompletionStage and transforming it into another CompletionStage. Where the CompletionStage is a CompletableFuture, the CompletionStage returned following transformation will be another CompletableFuture. Therefore, while you may not know when a CompletableFuture will be completed with a value, you can use CompletionStage methods to define the subsequent processing to be performed based on that value. Some of these methods are analogues (with different names) of methods available on the Java 8 Streams api or classes such as Optional, and we will also compare to some of these.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_the_thenapply_method">The thenApply Method</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>A convenient example of this is the thenApply method, which is analogous to map on the streaming API (or on the Optional class, for example). In effect the contract of thenApply is it returns a new CompletionStage. The result of this future is the result of the original CompletionStage following application of the function supplied to thenApply, and this CompletionStage will be completed once the function completes (either successfully or exceptionally). Initially we will restrict the discussion, for clarity, to successful completion only, and we will return to exceptional behaviours subsequently.</p>
+</div>
+<div class="paragraph">
+<p>In the context of the CompletableFuture class you can say "given future A which will evaluate successfully to value a, I want to convert it to a future B which will evaluate to value b by transforming the result using thenApply to apply a function which converts value a to value b".</p>
+</div>
+<div class="paragraph">
+<p>A simple demonstration of this is the following JUnit test method (we&#8217;ll reuse delayedValueSupplier in subsequent discussions):-</p>
+</div>
+<div class="listingblock">
+<div class="title">thenApply.java</div>
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="java"><span class="comment">// We'll allow a 2-sized thread pool for async execution, rather than using the fork/join pool for asynchronous</span>
+<span class="comment">// value generation</span>
+<span class="directive">final</span> <span class="predefined-type">Executor</span> executor = <span class="predefined-type">Executors</span>.newFixedThreadPool(<span class="integer">2</span>);
+
+
+<span class="annotation">@Test</span>
+<span class="directive">public</span> <span class="type">void</span> demoThenApply() <span class="directive">throws</span> <span class="exception">Exception</span> {
+    <span class="directive">final</span> CompletableFuture&lt;<span class="predefined-type">Integer</span>&gt; future = CompletableFuture
+        .supplyAsync(delayedValueSupplier(<span class="integer">1</span>), executor) <i class="conum" data-value="1"></i><b>(1)</b>
+        .thenApply(i -&gt; i + <span class="integer">3</span>);
+    assertThat(future.get(), is(<span class="integer">4</span>));
+}
+
+<span class="directive">private</span> Supplier&lt;<span class="predefined-type">Integer</span>&gt; delayedValueSupplier(<span class="directive">final</span> <span class="type">int</span> value) {
+    <span class="keyword">return</span> delayedValueSupplier(value, <span class="integer">1000</span>);
+}
+
+<span class="directive">private</span> Supplier&lt;<span class="predefined-type">Integer</span>&gt; delayedValueSupplier(<span class="directive">final</span> <span class="type">int</span> value, <span class="directive">final</span> <span class="type">int</span> delayMs) {
+    <span class="keyword">return</span> () -&gt; {
+        <span class="keyword">try</span> {
+            <span class="predefined-type">Thread</span>.sleep(delayMs);
+        } <span class="keyword">catch</span> (<span class="exception">InterruptedException</span> e) {
+            <span class="keyword">throw</span> <span class="keyword">new</span> <span class="exception">RuntimeException</span>(<span class="string"><span class="delimiter">&quot;</span><span class="content">Problem while waiting to return value</span><span class="delimiter">&quot;</span></span>);
+        }
+        <span class="keyword">return</span> value;
+    };
+}</code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<table>
+<tr>
+<td><i class="conum" data-value="1"></i><b>1</b></td>
+<td>supplyAsync is a simple factory method for CompletableFutures and enables us to define a delayed result via the delayedValueSupplier methods</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>This is shown schematically below:-</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="images/CFthenApplySuccess.png" alt="CFthenApplySuccess">
+</div>
+<div class="title">Figure 1. thenApply transforms similar to map</div>
+</div>
+<div class="paragraph">
+<p>Figure 1 also lets me introduce some of the diagrammatic notation I&#8217;ll be using in this and subsequent articles.</p>
+</div>
+<div class="paragraph">
+<p>The blue square boxes represent CompletionStages (or for the purposes of our discussion CompletableFutures).</p>
+</div>
+<div class="paragraph">
+<p>A green box inside a CompletionStage containing a white letter means that that stage will complete successfully yielding a value represented by the letter.</p>
+</div>
+<div class="paragraph">
+<p>A blue arrow represents an application of a function which will complete successfully, via thenApply, and the f: a &#8594; b represents that the function applied will convert the value a to value b.</p>
+</div>
+<div class="paragraph">
+<p>We can therefore see that, for successful completion, thenApply behaves similarly to the map method on a non-empty Optional. If you simply change the meaning of the blue square box to "an Optional", green to "containing the specified value" and the blue arrow to "map", using the same function, assuming successful completion, the diagram is identical.</p>
+</div>
+<div class="paragraph">
+<p>It is worth noting at this point that the <a href="https://github.com/aol/cyclops-react">cyclops-react</a> library offers the <strong>FutureW</strong> class which offers the more usual <strong>map</strong>/<strong>flatMap</strong> semantics for transformations.</p>
+</div>
+<div class="paragraph">
+<p>Finally, for the thenApply method (and most other then&#8230;&#8203; methods) there are also asynchronous analogues which will cause the transformation to be executed asynchronously on either the default asynchronous execution capability (the fork/join pool) or one specified by the caller. While the specifics of the threading model vary (i.e. which thread will run the new CompletionStage) the essential semantics are the same.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_the_thencompose_method">The thenCompose Method</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Now we have explored thenApply, we can examine another similar method - thenCompose. This is rather like thenApply, except that the function applied returns a CompletionStage implementor). This is useful for the scenario where you want to initiate a new asynchronous computation which can only be defined once you have the result of the current computation, and is therefore analogous to the flatMap method on the Optional class.</p>
+</div>
+<div class="paragraph">
+<p>The thenApply method covers many scenarios, but it might be that the work you want to do in the CompletionStage you are defining can only be accessed via an asynchronous API, which you will have to wrap in a CompletableFuture. Rather than dig through a hierarchy of CompletionStages, thenCompose provides a CompletionStage which will complete when the one generated by application of the function to the result completes. The result of this is that the programmer only has to consider a CompletableFuture which will complete with a result.</p>
+</div>
+<div class="paragraph">
+<p>A simple (though contrived) demonstration of this is the following JUnit test method :-</p>
+</div>
+<div class="listingblock">
+<div class="title">thenCompose.java</div>
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="java"><span class="annotation">@Test</span>
+<span class="directive">public</span> <span class="type">void</span> demoThenCompose() <span class="directive">throws</span> <span class="exception">Exception</span> {
+    <span class="comment">// We'll use one future to specify how long a subsequent future will take</span>
+    <span class="directive">final</span> CompletableFuture&lt;<span class="predefined-type">Integer</span>&gt; future = CompletableFuture
+        .supplyAsync(delayedValueSupplier(<span class="integer">3</span>), executor)
+        .thenCompose(i -&gt; CompletableFuture
+            .supplyAsync(delayedValueSupplier(<span class="integer">2</span>, i * <span class="integer">100</span>), executor)); <i class="conum" data-value="1"></i><b>(1)</b>
+    assertThat(future.get(), is(<span class="integer">2</span>));
+}</code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<table>
+<tr>
+<td><i class="conum" data-value="1"></i><b>1</b></td>
+<td>By using supplyAsync within the thenCompose we ensure that we will generate another CompletableFuture which may complete on yet another thread.</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>A schematic view based on the diagrammatic conventions established previously is shown in Figure 2 below:-</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="images/CFthenComposeSuccess.png" alt="CFthenComposeSuccess">
+</div>
+<div class="title">Figure 2. thenCompose transforms similar to flatMap</div>
+</div>
+<div class="paragraph">
+<p>We&#8217;ve represented thenCompose by a different coloured arrow and introduced the cf(x) notation in the function definition - what this means is that the function will return a CompletableFuture (could be any CompletionStage implementor really) which will complete successfully with the value x.</p>
+</div>
+<div class="paragraph">
+<p>Again, if you replace the meaning of the blue square wrapping green square with "Optional containing specified value" and cf(x) with Optional.of(x) you can see that thenCompose is analogous to flatMap on the Optional class, and cyclops-react&#8217;s FutureW class has a flatMap method.</p>
+</div>
+<div class="paragraph">
+<p>thenCompose also offers async variants, but again the essential semantics remain the same.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_pipelines">Pipelines</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Since the thenApply/thenCompose methods of CompletionStage also return CompletionStage implementors, transformations can easily be chained together so that once once stage completes, the processing of the next will commence, and so on and so forth. Figure 3 shows an example pipeline using both thenApply and thenCompose for processing.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="images/CFPipeline.png" alt="CFPipeline">
+</div>
+<div class="title">Figure 3. Pipeline of CompletionStages (example)</div>
+</div>
+<div class="paragraph">
+<p>We begin with a CompletionStage which will complete with value a but following the application of thenApply and thenCompose we are left with a CompletionStage which will complete with value c. In effect we combine multiple computations into one via this mechanism.</p>
+</div>
+<div class="paragraph">
+<p>The ease of definition of such a pipeline given a CompletionStage/CompletableFuture can be seen in the following code snippet:-</p>
+</div>
+<div class="listingblock">
+<div class="title">multiStagePipeline.java</div>
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="java"><span class="annotation">@Test</span>
+<span class="directive">public</span> <span class="type">void</span> demoMultiStagePipeline() <span class="directive">throws</span> <span class="exception">Exception</span> {
+    <span class="comment">// We'll use one future to specify how long a subsequent future will take</span>
+    <span class="directive">final</span> CompletableFuture&lt;<span class="predefined-type">Integer</span>&gt; future = CompletableFuture
+        .supplyAsync(delayedValueSupplier(<span class="integer">3</span>), executor)
+        .thenApply(i -&gt; {
+            <span class="predefined-type">System</span>.out.println(<span class="string"><span class="delimiter">&quot;</span><span class="content">First future completed, </span><span class="delimiter">&quot;</span></span> + i);
+            <span class="keyword">return</span> i + <span class="integer">1</span>;
+        })
+        .thenCompose(i -&gt; CompletableFuture
+            .supplyAsync(delayedValueSupplier(i + <span class="integer">2</span>, i * <span class="integer">100</span>), executor));
+    assertThat(future.get(), is(<span class="integer">6</span>));
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This can be particularly convenient when dealing with asynchronous processing using CompletableFutures. It may be necessary to call out to an asynchronous API, and then do some subsequent processing (which itself may be partially or wholly asynchronous) on the result.</p>
+</div>
+<div class="paragraph">
+<p>You could call CompletableFuture::get() to block and return the value when complete (see below), but that blocks your current thread until the result is ready.</p>
+</div>
+<div class="paragraph">
+<p>You could alternatively use thenApply/thenCompose (or one of the async variations) to define the subsequent processing to be applied to generate a new result, and avoid using the current thread for the subsequent computation elements unless or until you absolutely cannot proceed without the result. This may even prove that you don&#8217;t need to return the asynchronous processing to the original calling thread at all.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_consumption">Consumption</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>So, once we have composed multiple computations together into one, to give our final CompletionStage, how do we use the final result?</p>
+</div>
+<div class="paragraph">
+<p>There are multiple options for this. For this discussion (since I will be writing a subsequent article on exception handling in CompletionStage pipelines) we&#8217;ll restrict to the assumption that all computations are sufficiently straightforward as to guarantee success. This is an unrealistic assumption in most use-cases for CompletableFutures, but it provides us with a simple discussion point on which we can expand later.</p>
+</div>
+<div class="paragraph">
+<p>The "simplest" approach to consuming the result of a CompletableFuture is to wait until the future is complete (possibly up to a specified timeout period) and then continue processing with the completion value. The get() and join() methods offer this functionality - calling any of these methods blocks the current thread until the future is complete, and then returns the completion value. The get method can optionally take a timeout value, after which time to throw an exception The join method does not offer a timeout, but unlike get will only throw unchecked exceptions, making it more convenient for some use cases. Note that get and join methods are not CompletionStage methods, but only arise on the CompletableFuture implementation.</p>
+</div>
+<div class="paragraph">
+<p>The above methods are useful if you actually want to block the current thread until processing is complete. However, there is not always a requirement to do this (and indeed sometimes it&#8217;s undesirable, for example when using non-blocking event-driven frameworks such as vert.x, blocking an event loop thread causes serious problems). Therefore there are additional sets of methods which simply lead to consumption of the result (or exception) when it is ready.</p>
+</div>
+<div class="paragraph">
+<p>These include the thenAccept, handle and whenComplete methods. all of which have async variants if you choose to migrate subsequent processing to yet another thread for any reason. The thenAccept method returns a CompletableFuture&lt;Void&gt; (so you can continue the pipeline if you wish) and takes a consumer for the result. The handle method is akin to thenApply, except that it permits you to handle exceptional completion of the previous stage, as well as successful. The whenComplete method doesn&#8217;t transform the result or exception, but allows you to act on them (it returns a CompletionStage with the same result or exception, but allows you to apply a BiConsumer to them). There is one final method of interest - the exceptionally method permits you to handle the exceptions raised during processing of a specific stage and convert to a known value, where this is useful. We&#8217;ll return to exception handling in a subsequent article.</p>
+</div>
+<div class="paragraph">
+<p>In conclusion, it is possible to use the CompletionStage API to assemble processing pipelines for asynchronously generated results expressed as CompletableFutures, and the key elements of this API are semantically analogous to map and flatMap on classes such as Optional. These pipelines can be used to continue off-thread processing after a future is completed (and possibly even to perform all subsequent processing off the originating thread).</p>
+</div>
+</div>
+</div>
+</div>
+<div id="footer">
+<div id="footer-text">
+Last updated 2020-09-01 18:00:14 UTC
+</div>
+</div>
+</body>
+</html>

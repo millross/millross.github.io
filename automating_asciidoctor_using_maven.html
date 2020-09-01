@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<!--[if IE]><meta http-equiv="X-UA-Compatible" content="IE=edge"><![endif]-->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="generator" content="Asciidoctor 1.5.3">
+<title>Automating AsciiDoctor using Maven</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:300,300italic,400,400italic,600,600italic%7CNoto+Serif:400,400italic,700,700italic%7CDroid+Sans+Mono:400,700">
+<link rel="stylesheet" href="./asciidoctor.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.4.0/css/font-awesome.min.css">
+<link rel="stylesheet" href="./coderay-asciidoctor.css">
+</head>
+<body class="article">
+<div id="header">
+<h1>Automating AsciiDoctor using Maven</h1>
+</div>
+<div id="content">
+<div class="sect1">
+<h2 id="_introduction">Introduction</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>In the previous blog entry about AsciiDoctor, I recommended saving the generation command into a shell script or batch
+file to make it easy to add additional processing/pre-processing later.</p>
+</div>
+<div class="paragraph">
+<p>While at the time this seemed very straightforward, for those of us who want to generate documentation as part of a
+Java build, there&#8217;s a more convenient approach. There is a
+<a href="https://github.com/asciidoctor/asciidoctor-maven-plugin/">Maven plugin for AsciiDoctor</a> (Maven appears to have plugins
+for just about everything), making it easy to generate documentation from templates as part of a Maven build. This in
+turn can be  used in conjunction with other functionality provided by Maven (e.g. Maven resources plugin to move custom
+css  into an appropriate location ready for upload to a website) to make a more complete build script.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_the_asciidoctor_maven_plugin">The Asciidoctor Maven Plugin</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The <a href="https://github.com/asciidoctor/asciidoctor-maven-plugin/">Asciidoctor Maven Plugin</a> can be added to the plugins
+section of a maven build script (pom) to convert asciidoc files into html (or other output formats). The basics of this
+are relatively straightforward, simply define an execution (or multiple executions) which output to desired locations.</p>
+</div>
+<div class="paragraph">
+<p>The plugin is highly configurable but by default will use src/main/asciidoc as its input directory for asciidoc files,
+we chose to use this, and also to use the default output directory target/generated-docs. We treat the generated html
+as generated resources on which we might want to perform further processing, so we chose the generate-resources phase
+for our processing. Our plugin snippet (at time of writing) is as below:-</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="xml">pom.xml snippet
+----
+<span class="tag">&lt;plugin&gt;</span>
+    <span class="tag">&lt;groupId&gt;</span>org.asciidoctor<span class="tag">&lt;/groupId&gt;</span>
+    <span class="tag">&lt;artifactId&gt;</span>asciidoctor-maven-plugin<span class="tag">&lt;/artifactId&gt;</span>
+    <span class="tag">&lt;version&gt;</span>1.5.3<span class="tag">&lt;/version&gt;</span>
+    <span class="tag">&lt;executions&gt;</span>
+        <span class="tag">&lt;execution&gt;</span>
+            <span class="tag">&lt;id&gt;</span>output-html<span class="tag">&lt;/id&gt;</span>
+            <span class="tag">&lt;phase&gt;</span>generate-resources<span class="tag">&lt;/phase&gt;</span>
+            <span class="tag">&lt;goals&gt;</span>
+                <span class="tag">&lt;goal&gt;</span>process-asciidoc<span class="tag">&lt;/goal&gt;</span>
+            <span class="tag">&lt;/goals&gt;</span>
+            <span class="tag">&lt;configuration&gt;</span>
+                <span class="tag">&lt;backend&gt;</span>html5<span class="tag">&lt;/backend&gt;</span>
+                <span class="tag">&lt;sourceHighlighter&gt;</span>coderay<span class="tag">&lt;/sourceHighlighter&gt;</span> <i class="conum" data-value="1"></i><b>(1)</b>
+                <span class="tag">&lt;attributes&gt;</span>
+                    <span class="tag">&lt;linkcss&gt;</span>true<span class="tag">&lt;/linkcss&gt;</span> <i class="conum" data-value="2"></i><b>(2)</b>
+                <span class="tag">&lt;/attributes&gt;</span>
+            <span class="tag">&lt;/configuration&gt;</span>
+        <span class="tag">&lt;/execution&gt;</span>
+    <span class="tag">&lt;/executions&gt;</span>
+<span class="tag">&lt;/plugin&gt;</span>
+----
+<span class="tag">&lt;1&gt;</span> Use coderay source highlighter to provide source code highlighting (e.g. the above snippet)
+<span class="tag">&lt;2&gt;</span> Link to an external css file rather than embedding style information in the generated html</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>As can be seen, the defaults (at least for our purposes) seem pretty reasonable, and all we had to specify was the
+backend (we want to output html 5) and the fact that we want to link, rather than embed, our styles (linkcss). We
+still need to set up the packaging ready for automated upload to our blog using the maven resources plugin, and then
+configure automated upload on approval of blog changes, but this is a pretty convenient start.</p>
+</div>
+</div>
+</div>
+</div>
+<div id="footer">
+<div id="footer-text">
+Last updated 2020-09-01 18:00:14 UTC
+</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<!--[if IE]><meta http-equiv="X-UA-Compatible" content="IE=edge"><![endif]-->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="generator" content="Asciidoctor 1.5.3">
+<title>Error propagation in CompletableFuture/CompletionStage pipelines</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:300,300italic,400,400italic,600,600italic%7CNoto+Serif:400,400italic,700,700italic%7CDroid+Sans+Mono:400,700">
+<link rel="stylesheet" href="./asciidoctor.css">
+<link rel="stylesheet" href="./coderay-asciidoctor.css">
+</head>
+<body class="article">
+<div id="header">
+<h1>Error propagation in CompletableFuture/CompletionStage pipelines</h1>
+</div>
+<div id="content">
+<div class="sect1">
+<h2 id="_introduction">Introduction</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>In my <a href="completion-stage-future-introduction.html">previous post</a> on the subject of CompletableFutures and CompletionStages, I gave a brief introduction to the concepts. I also focused primarily on non-exceptional completion of futures, despite the fact that the original driver for writing the posts was because I&#8217;d been learning about exceptional behaviours in CompletionStage pipelines.</p>
+</div>
+<div class="paragraph">
+<p>The primary reason for the previous post was because it was hard to cover exceptional behaviours without providing a simple introduction and building some kind of representation (in this case graphical) of the elements of such a pipeline.</p>
+</div>
+<div class="paragraph">
+<p>This post moves on from that to discuss exceptional behaviours (what happens when a CompletionStage fails), and extends that graphical represention. Again, the basis for the information provided in this post is work I have been doing on the asynchronous version of the <a href="http://www.pac4j.org">pac4j</a> pac4j API and library, and settled on CompletableFutures as the way to represent the async API.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_simple_exceptional_completion">Simple exceptional completion</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Let&#8217;s start by considering one of the simplest scenarios - a future which completes exceptionally but is not further transformed using methods such as thenApply or thenCompose. What happens when we call join()? Firstly let&#8217;s take a quick look at the <a href="https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/CompletableFuture.html#join--">join()</a> method, which wraps exceptional completion in a CompletionException (unchecked), spits out a CancellationException if the operation was cancelled or returns the completion value on completion (but blocks the current thread until then). The CompletionException thus raised wraps the triggering Throwable, which can therefore be exposed via getCause().</p>
+</div>
+<div class="paragraph">
+<p>So firstly let&#8217;s create some convenience methods to let us represent exceptional completion:-</p>
+</div>
+<div class="listingblock">
+<div class="title">DelayedExceptionalCompletion.java</div>
+<div class="content">
+<pre class="CodeRay highlight nowrap"><code data-lang="java"><span class="directive">public</span> CompletableFuture&lt;<span class="predefined-type">Integer</span>&gt; delayedExceptionalCompletion(<span class="directive">final</span> <span class="predefined-type">Throwable</span> t) {
+    <span class="keyword">return</span> delayedExceptionalCompletion(t, <span class="integer">1000</span>);
+}
+
+<span class="directive">public</span> CompletableFuture&lt;<span class="predefined-type">Integer</span>&gt; delayedExceptionalCompletion(<span class="directive">final</span> <span class="predefined-type">Throwable</span> t, <span class="directive">final</span> <span class="type">int</span> delayMs) {
+
+    <span class="directive">final</span> CompletableFuture&lt;<span class="predefined-type">Integer</span>&gt; future = <span class="keyword">new</span> CompletableFuture&lt;&gt;();
+
+    <span class="keyword">try</span> {
+        <span class="predefined-type">Thread</span>.sleep(delayMs);
+        future.completeExceptionally(t);
+    } <span class="keyword">catch</span> (<span class="exception">InterruptedException</span> ex) {
+        <span class="keyword">throw</span> <span class="keyword">new</span> <span class="exception">RuntimeException</span>(<span class="string"><span class="delimiter">&quot;</span><span class="content">Problem waiting to complete future exceptionally</span><span class="delimiter">&quot;</span></span>);
+    }
+    <span class="keyword">return</span> future;
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>These permit us to create a future which will complete with a selected exception following a delay.</p>
+</div>
+<div class="paragraph">
+<p>We&#8217;ll also define a trivial exception class for the tests:-</p>
+</div>
+<div class="listingblock">
+<div class="title">IntentionalException.java</div>
+<div class="content">
+<pre class="CodeRay highlight nowrap"><code data-lang="java"><span class="directive">public</span> <span class="type">class</span> <span class="class">IntentionalException</span> <span class="directive">extends</span> <span class="exception">RuntimeException</span> {
+
+    <span class="directive">public</span> IntentionalException() {
+        <span class="local-variable">super</span>(<span class="string"><span class="delimiter">&quot;</span><span class="content">Intentional exception</span><span class="delimiter">&quot;</span></span>);
+    }
+
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now let&#8217;s implement a simple test (keeping in mind the statement above about join() which makes it clear that any exception supplied in completeExceptionally() will be wrapped in a CompletionException):-</p>
+</div>
+<div class="listingblock">
+<div class="title">SimpleExceptionalCompletionDemo.java</div>
+<div class="content">
+<pre class="CodeRay highlight nowrap"><code data-lang="java">Test(expected = IntentionalException.class)
+
+<span class="directive">public</span> <span class="type">void</span> testExceptionalCompletion() <span class="directive">throws</span> <span class="predefined-type">Throwable</span> {
+
+    <span class="directive">final</span> CompletableFuture&lt;<span class="predefined-type">Integer</span>&gt; future = delayedExceptionalCompletion(<span class="keyword">new</span> IntentionalException());
+    <span class="keyword">try</span> {
+        future.join();
+    } <span class="keyword">catch</span> (CompletionException ex) {
+        <span class="keyword">throw</span> (ex.getCause());
+    }
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>As one might expect, this test will pass as we unwrap the exceptional completion and throw it outwards for the test to deal with. However, there is another (related) scenario. Calling join() is specified to lead to wrapping in a CompletionException, when we wait for the result. However, we might instead do some subsequent processing (for example via thenAccept). What does the exception look like in the next CompletionStage down the line?</p>
+</div>
+<div class="paragraph">
+<p>The following test demonstrates this:-</p>
+</div>
+<div class="listingblock">
+<div class="title">SimpleExceptionalCompletionDemo.java</div>
+<div class="content">
+<pre class="CodeRay highlight nowrap"><code data-lang="java"><span class="annotation">@Test</span>(expected = IntentionalException.class)
+<span class="directive">public</span> <span class="type">void</span> exceptionCompletionAsSeenFromNextStage() <span class="directive">throws</span> <span class="predefined-type">Throwable</span> {
+
+    <span class="comment">// This is where we'll store the exception seen in the next stage</span>
+    <span class="directive">final</span> <span class="predefined-type">AtomicReference</span>&lt;<span class="predefined-type">Throwable</span>&gt; thrownException = <span class="keyword">new</span> <span class="predefined-type">AtomicReference</span>&lt;&gt;(<span class="predefined-constant">null</span>);
+
+    <span class="directive">final</span> CompletableFuture&lt;<span class="predefined-type">Integer</span>&gt; future = delayedExceptionalCompletion(<span class="keyword">new</span> IntentionalException())
+            .whenComplete((v, t) -&gt; {
+                <span class="keyword">if</span> (t != <span class="predefined-constant">null</span>) {
+                    thrownException.set(t);
+                }
+            });
+
+    <span class="keyword">try</span> {
+        future.join();
+    } <span class="keyword">catch</span> (CompletionException ex) {
+        <span class="keyword">throw</span> (Optional.ofNullable(thrownException.get()).orElse(ex));
+    }
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Again this test passes. Since whenComplete is effectively the next completion stage (or could represent subsequent processing) we can see that the view of the exception in this stage is still an unwrapped IntentionalException, as we might naively expect. Therefore we can infer that, when completeExceptionally is called, its argument is passed directly to the next stage.</p>
+</div>
+<div class="paragraph">
+<p>Revisiting our graphical notation from the previous article, this identifies representations for a new completion scenario - a CompletionStage which will completeExceptionally with the exception e (represented by a red box inside the resulting CompletionStage). Fig. 1 shows this representation:-</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="images/CFExceptionallyCompletedFuture.png" alt="CFExceptionallyCompletedFuture">
+</div>
+<div class="title">Figure 1. CompletionStage on which completeExceptionally has been called with exception e.</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_exceptions_during_thenapply">Exceptions during thenApply</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Now let&#8217;s think about what happens when an exception occurs during a thenApply transformation. We would assume that when an exception is thrown by function application during a thenApply call, that the resulting stage will complete exceptionally and therefore we will see something similar to our completeExceptionally exploration above.</p>
+</div>
+<div class="paragraph">
+<p>So first let&#8217;s mimic the test where we wait for the result via join() - in this case if we throw an IntentionalException during the transformation function, we would expect to observe a CompletionException wrapping our IntentionalException.</p>
+</div>
+<div class="listingblock">
+<div class="title">thenApplyExceptionNaive.java</div>
+<div class="content">
+<pre class="CodeRay highlight nowrap"><code data-lang="java"><span class="annotation">@Test</span>(expected = IntentionalException.class)
+<span class="directive">public</span> <span class="type">void</span> exceptionCallingThenApply() <span class="directive">throws</span> <span class="predefined-type">Throwable</span> {
+    <span class="directive">final</span> CompletableFuture&lt;<span class="predefined-type">Integer</span>&gt; future = CompletableFuture.supplyAsync(delayedValueSupplier(<span class="integer">1</span>), executor)
+        .thenApply(i -&gt; {
+            <span class="keyword">throw</span> <span class="keyword">new</span> IntentionalException();
+        });
+
+    <span class="keyword">try</span> {
+        future.join();
+    } <span class="keyword">catch</span> (CompletionException ex) {
+        <span class="keyword">throw</span> ex.getCause();
+    }
+
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This test passes, so we can be happy that use of join() behaves consistently when applied to a transformation-derived CompletableFuture where the exception occurs during the transformation.</p>
+</div>
+<div class="paragraph">
+<p>Now let&#8217;s look at how the subsequent completion stage sees an exception which occurs during thenApply processing. Here is the code for a test analogous to the one shown above for completeExceptionally().</p>
+</div>
+<div class="listingblock">
+<div class="title">Exceptional Completion Observed in Subsequent Stage</div>
+<div class="content">
+<pre class="CodeRay highlight nowrap"><code data-lang="java"><span class="annotation">@Test</span>(expected = IntentionalException.class)
+<span class="directive">public</span> <span class="type">void</span> exceptionCallingThenApplyAsObservedFromNextStage() <span class="directive">throws</span> <span class="predefined-type">Throwable</span> {
+
+    <span class="directive">final</span> <span class="predefined-type">AtomicReference</span>&lt;<span class="predefined-type">Throwable</span>&gt; thrownException = <span class="keyword">new</span> <span class="predefined-type">AtomicReference</span>&lt;&gt;(<span class="predefined-constant">null</span>);
+
+    <span class="directive">final</span> CompletableFuture&lt;<span class="predefined-type">Object</span>&gt; future = CompletableFuture.supplyAsync(delayedValueSupplier(<span class="integer">1</span>), executor)
+        .thenApply(i -&gt; {
+            <span class="keyword">throw</span> <span class="keyword">new</span> IntentionalException();
+        })
+        .whenComplete((v, t) -&gt; {
+            <span class="keyword">if</span> (t != <span class="predefined-constant">null</span>) {
+                thrownException.set(t);
+            }
+        });
+    <span class="keyword">try</span> {
+        future.join();
+    } <span class="keyword">catch</span> (CompletionException ex) {
+        <span class="keyword">throw</span> (Optional.ofNullable(thrownException.get()).orElse(ex));
+    }
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>However, running this test actually fails, because the exception now observed during the whenComplete processing is now the original IntentionalException, wrapped in a CompletionException. In other words, although a call to completeExceptionally leads the the causing exception being passed to the next stage, an exception during thenApply transformation leads to the exception being wrapped in a CompletionException. This is a subtle distinction but it is worth keeping in mind. We will revisit this a little further when we discuss longer pipelines later in this article.</p>
+</div>
+<div class="paragraph">
+<p>If we change this test to unwrap the exception stored in thrownException, we do indeed see that the IntentionalException we threw is still accessible:-</p>
+</div>
+<div class="listingblock">
+<div class="title">Unwrapping the Exception Observed in Subsequent Stage</div>
+<div class="content">
+<pre class="CodeRay highlight nowrap"><code data-lang="java"><span class="annotation">@Test</span>(expected = IntentionalException.class)
+<span class="directive">public</span> <span class="type">void</span> exceptionCallingThenApplyAsObservedFromNextStage() <span class="directive">throws</span> <span class="predefined-type">Throwable</span> {
+    <span class="directive">final</span> <span class="predefined-type">AtomicReference</span>&lt;<span class="predefined-type">Throwable</span>&gt; thrownException = <span class="keyword">new</span> <span class="predefined-type">AtomicReference</span>&lt;&gt;(<span class="predefined-constant">null</span>);
+    <span class="directive">final</span> CompletableFuture&lt;<span class="predefined-type">Object</span>&gt; future = CompletableFuture.supplyAsync(delayedValueSupplier(<span class="integer">1</span>), executor)
+            .thenApply(i -&gt; {
+                <span class="keyword">throw</span> <span class="keyword">new</span> IntentionalException();
+            })
+            .whenComplete((v, t) -&gt; {
+                <span class="keyword">if</span> (t != <span class="predefined-constant">null</span>) {
+                    thrownException.set(t);
+                }
+            });
+    <span class="keyword">try</span> {
+        future.join();
+    } <span class="keyword">catch</span> (CompletionException ex) {
+        <span class="keyword">throw</span> (Optional.ofNullable(thrownException.get().getCause()).orElse(<span class="keyword">new</span> <span class="exception">RuntimeException</span>(<span class="string"><span class="delimiter">&quot;</span><span class="content">No thrown exception</span><span class="delimiter">&quot;</span></span>)));
+    }
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This also leads to an extension of our graphical notation which we should cover here. Fig. 2 shows a representation of this scenario:-</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="images/CFthenApplyFailure.png" alt="CFthenApplyFailure">
+</div>
+<div class="title">Figure 2. Exceptional completion during a thenApply call</div>
+</div>
+<div class="paragraph">
+<p>We add the concept of a pink-coloured arrow to represent a thenApply call using a function which will throw an exception e. The outcome of this (from a successfully completing CompletionStage) is a CompletionStage which will completeExceptionally with a CompletionException (red box) wrapping the exception e (yellow box).</p>
+</div>
+<div class="paragraph">
+<p>We&#8217;ll refer back to this notation when we come to discuss propagation in pipelines of stages.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_exceptions_during_thencompose">Exceptions during thenCompose</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The above discussion of exceptional behaviour during thenApply leads us to predictions of what will happen when an exception is thrown during a thenCompose call. We would expect that when an exception E is thrown during application of a thenCompose transformation, then use of join() will lead to the ultimately thrown exception being E wrapped in a CompletionException.</p>
+</div>
+<div class="paragraph">
+<p>The test below demonstrates this:-</p>
+</div>
+<div class="listingblock">
+<div class="title">thenComposeException.java</div>
+<div class="content">
+<pre class="CodeRay highlight nowrap"><code data-lang="java"><span class="annotation">@Test</span>(expected = IntentionalException.class)
+<span class="directive">public</span> <span class="type">void</span> exceptionCallingThenCompose() <span class="directive">throws</span> <span class="predefined-type">Throwable</span> {
+    <span class="directive">final</span> CompletableFuture&lt;<span class="predefined-type">Integer</span>&gt; future = CompletableFuture.supplyAsync(delayedValueSupplier(<span class="integer">1</span>), executor)
+            .thenCompose(i -&gt; {
+                <span class="keyword">throw</span> <span class="keyword">new</span> IntentionalException();
+            });
+
+    <span class="keyword">try</span> {
+        future.join();
+    } <span class="keyword">catch</span> (CompletionException ex) {
+        <span class="keyword">throw</span> ex.getCause();
+    }
+
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Indeed, this test passes and the behaviour is as we predicted, and we can therefore draw the following diagram:-</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="images/CFthenComposeFailure.png" alt="CFthenComposeFailure">
+</div>
+<div class="title">Figure 3. Exception during thenCompose processing</div>
+</div>
+<div class="paragraph">
+<p>So now we have predictable behaviours for both failing transformation steps and
+failing computations.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_exceptions_in_pipelines">Exceptions in pipelines</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Now let&#8217;s put this together. In the <a href="completion-stage-future-introduction.html">previous article</a> we talked about
+combining multiple steps (thenApply/thenCompose) into pipelines and drew up a simple schematic based on a CompletionStage which
+we transformed using thenApply, and then again using thenCompose. We can use the same pipeline to illustrate exception propagation
+through the pipeline.</p>
+</div>
+<div class="sect2">
+<h3 id="_exception_at_start_of_pipeline">Exception at start of pipeline</h3>
+<div class="paragraph">
+<p>Firstly let&#8217;s consider the simple case of a CompletionStage which will complete exceptionally, and on this we call thenApply (but with
+a function that would never fail) and to the result of this we call thenCompose (with a function that would never fail).</p>
+</div>
+<div class="paragraph">
+<p>Given that we established earlier that the next stage in a pipeline sees the exception with which the previous stage completed in
+an unwrapped form, we might reasonably expect the following test to pass:-</p>
+</div>
+<div class="listingblock">
+<div class="title">transformationsOfFailedFutureNaive.java</div>
+<div class="content">
+<pre class="CodeRay highlight nowrap"><code data-lang="java"><span class="annotation">@Test</span>(expected = IntentionalException.class)
+<span class="directive">public</span> <span class="type">void</span> exceptionCompletionFollowedByPipeline() <span class="directive">throws</span> <span class="predefined-type">Throwable</span> {
+    <span class="comment">// This is where we'll store the exception seen in the next stage</span>
+    <span class="directive">final</span> <span class="predefined-type">AtomicReference</span>&lt;<span class="predefined-type">Throwable</span>&gt; thrownException = <span class="keyword">new</span> <span class="predefined-type">AtomicReference</span>&lt;&gt;(<span class="predefined-constant">null</span>);
+
+    <span class="directive">final</span> CompletableFuture&lt;<span class="predefined-type">Integer</span>&gt; future = delayedExceptionalCompletion(<span class="keyword">new</span> IntentionalException())
+            .thenApply(i -&gt; i + <span class="integer">1</span>)
+            .thenCompose(i -&gt; CompletableFuture.supplyAsync(delayedValueSupplier(<span class="integer">1</span>), executor))
+            .whenComplete((v, t) -&gt; {
+                <span class="keyword">if</span> (t != <span class="predefined-constant">null</span>) {
+                    thrownException.set(t);
+                }
+            });
+
+    <span class="keyword">try</span> {
+        future.join();
+    } <span class="keyword">catch</span> (CompletionException ex) {
+            <span class="keyword">throw</span> (Optional.ofNullable(thrownException.get()).orElse(<span class="keyword">new</span> <span class="exception">RuntimeException</span>(<span class="string"><span class="delimiter">&quot;</span><span class="content">UnexpectedException</span><span class="delimiter">&quot;</span></span>)));
+    }
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>However, running this test leads to test failure, because the result of the final thrownException.get() call is in fact
+a CompletionException whose cause is the IntentionalException with which we completed the original future.</p>
+</div>
+<div class="paragraph">
+<p>Commenting out the thenApply and thenCompose lines enables the test to pass. Therefore we can infer that once a failed future
+is transformed then the cause of the failure will be wrapped in a CompletionException, exactly as occurred when an exception
+was thrown during a transformation. This might seem counterintuitive, but is actually useful as it gives us consistency
+- as soon as we perform transformation, then we know we need to unwrap a CompletionException to get to the underlying cause.</p>
+</div>
+<div class="paragraph">
+<p>Modifying this approach so that we unwrap the exception we stored in the whenComplete call leads to the test passing,
+exactly as we did with thenApply/thenCompose:-</p>
+</div>
+<div class="listingblock">
+<div class="title">transformationsOfFailedFutureNaive.java</div>
+<div class="content">
+<pre class="CodeRay highlight nowrap"><code data-lang="java"><span class="annotation">@Test</span>(expected = IntentionalException.class)
+<span class="directive">public</span> <span class="type">void</span> exceptionCompletionFollowedByPipeline() <span class="directive">throws</span> <span class="predefined-type">Throwable</span> {
+    <span class="comment">// This is where we'll store the exception seen in the next stage</span>
+    <span class="directive">final</span> <span class="predefined-type">AtomicReference</span>&lt;<span class="predefined-type">Throwable</span>&gt; thrownException = <span class="keyword">new</span> <span class="predefined-type">AtomicReference</span>&lt;&gt;(<span class="predefined-constant">null</span>);
+
+    <span class="directive">final</span> CompletableFuture&lt;<span class="predefined-type">Integer</span>&gt; future = delayedExceptionalCompletion(<span class="keyword">new</span> IntentionalException())
+            .thenApply(i -&gt; i + <span class="integer">1</span>)
+            .thenCompose(i -&gt; CompletableFuture.supplyAsync(delayedValueSupplier(<span class="integer">1</span>), executor))
+            .whenComplete((v, t) -&gt; {
+                <span class="keyword">if</span> (t != <span class="predefined-constant">null</span>) {
+                    thrownException.set(t);
+                }
+            });
+
+    <span class="keyword">try</span> {
+        future.join();
+    } <span class="keyword">catch</span> (CompletionException ex) {
+            <span class="keyword">throw</span> (Optional.ofNullable(thrownException.get().getCause()).orElse(<span class="keyword">new</span> <span class="exception">RuntimeException</span>(<span class="string"><span class="delimiter">&quot;</span><span class="content">UnexpectedException</span><span class="delimiter">&quot;</span></span>)));
+    }
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>There is another point to note about this. Although we have two transformation steps (thenApply and thenCompose), we do not
+produce a CompletionException wrapping another CompletionException which wraps the original IntentionalException. In other words,
+CompletionExceptions will not be wrapped, as they already wrap the underlying cause.</p>
+</div>
+<div class="paragraph">
+<p>This scenario (and its behaviour) are shown in the following diagram:-</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="images/CFPipelineStartingWithExceptionalCompletion.png" alt="CFPipelineStartingWithExceptionalCompletion">
+</div>
+<div class="title">Figure 4. Exceptional completion at start of pipeline</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_exception_on_subsequent_step_of_pipeline">Exception on subsequent step of pipeline</h3>
+<div class="paragraph">
+<p>We&#8217;ve already seen what happens when a thenApply or a thenCompose call is applied to a successful future result and itself
+throws an exception e - the subsequent stage will be a failed future which holds a CompletionException whose cause is e.
+We&#8217;ve also seen in the immediately preceding section that CompletionExceptions will not be further wrapped. Therefore we
+would infer that if in the pipeline outlined above, the initial CompletionStage completed successfully but the thenApply step were
+to throw an exception e, the outcome of the final stage would be exceptional completion with a CompletionException whose cause
+would be the exception e thrown during the thenApply conversion.</p>
+</div>
+<div class="paragraph">
+<p>This (predicted) outcome is shown in the following diagram:-</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="images/CFPipelineFailureDuringThenApply.png" alt="CFPipelineFailureDuringThenApply">
+</div>
+<div class="title">Figure 5. Exceptional completion on intermediate step of pipeline</div>
+</div>
+<div class="paragraph">
+<p>We would also expect the following test to pass:-</p>
+</div>
+<div class="listingblock">
+<div class="title">failureOnMiddleStepOfPipeline.java</div>
+<div class="content">
+<pre class="CodeRay highlight nowrap"><code data-lang="java"><span class="annotation">@Test</span>(expected = IntentionalException.class)
+<span class="directive">public</span> <span class="type">void</span> exceptionDuringFirstTransformationInPipeline() <span class="directive">throws</span> <span class="predefined-type">Throwable</span> {
+    <span class="comment">// This is where we'll store the exception seen in the next stage</span>
+    <span class="directive">final</span> <span class="predefined-type">AtomicReference</span>&lt;<span class="predefined-type">Throwable</span>&gt; thrownException = <span class="keyword">new</span> <span class="predefined-type">AtomicReference</span>&lt;&gt;(<span class="predefined-constant">null</span>);
+
+    <span class="directive">final</span> CompletableFuture&lt;<span class="predefined-type">Integer</span>&gt; future = CompletableFuture.supplyAsync(delayedValueSupplier(<span class="integer">1</span>), executor)
+            .thenApply(i -&gt; {
+                <span class="keyword">throw</span> <span class="keyword">new</span> IntentionalException();
+            })
+            .thenCompose(i -&gt; CompletableFuture.supplyAsync(delayedValueSupplier(<span class="integer">1</span>), executor))
+            .whenComplete((v, t) -&gt; {
+                <span class="keyword">if</span> (t != <span class="predefined-constant">null</span>) {
+                    thrownException.set(t);
+                }
+            });
+    <span class="keyword">try</span> {
+        future.join();
+    } <span class="keyword">catch</span> (CompletionException ex) {
+        <span class="keyword">throw</span> (Optional.ofNullable(thrownException.get().getCause()).orElse(ex));
+    }
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This test passes, as expected, so the diagram above is a correct expression of the behaviour.</p>
+</div>
+<div class="paragraph">
+<p>The final case to consider is pretty straightforward, which is what happens in the pipeline above when the initial future
+will complete without error, the thenApply call will be successful, but then the subsequent thenCompose call will throw an exception e.
+This is exactly the same scenario as a failing thenCompose/thenApply on a successfully completing CompletionStage, which we have already
+established leads to a CompletionStage which will complete exceptionally, with a CompletionException wrapping the exception e.</p>
+</div>
+<div class="paragraph">
+<p>The diagram for this scenario is:-</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="images/CFPipelineFailureDuringThenCompose.png" alt="CFPipelineFailureDuringThenCompose">
+</div>
+<div class="title">Figure 6. Exception thrown on final transformation of pipeline</div>
+</div>
+<div class="paragraph">
+<p>It hardly seems worth writing a test to demonstrate this, but for completeness here it is:-</p>
+</div>
+<div class="listingblock">
+<div class="title">failureOnTerminalStepOfPipeline.java</div>
+<div class="content">
+<pre class="CodeRay highlight nowrap"><code data-lang="java"><span class="annotation">@Test</span>(expected = IntentionalException.class)
+<span class="directive">public</span> <span class="type">void</span> exceptionDuringLastTransformationInPipeline() <span class="directive">throws</span> <span class="predefined-type">Throwable</span> {
+    <span class="comment">// This is where we'll store the exception seen in the next stage</span>
+    <span class="directive">final</span> <span class="predefined-type">AtomicReference</span>&lt;<span class="predefined-type">Throwable</span>&gt; thrownException = <span class="keyword">new</span> <span class="predefined-type">AtomicReference</span>&lt;&gt;(<span class="predefined-constant">null</span>);
+
+    <span class="directive">final</span> CompletableFuture&lt;<span class="predefined-type">Integer</span>&gt; future = CompletableFuture.supplyAsync(delayedValueSupplier(<span class="integer">1</span>), executor)
+            .thenApply(i -&gt; i + <span class="integer">1</span>)
+            .&lt;<span class="predefined-type">Integer</span>&gt;thenCompose(i -&gt; {
+                <span class="keyword">throw</span> <span class="keyword">new</span> IntentionalException();
+            })
+            .whenComplete((v, t) -&gt; {
+                <span class="keyword">if</span> (t != <span class="predefined-constant">null</span>) {
+                    thrownException.set(t);
+                }
+            });
+    <span class="keyword">try</span> {
+        future.join();
+    } <span class="keyword">catch</span> (CompletionException ex) {
+        <span class="keyword">throw</span> (Optional.ofNullable(thrownException.get().getCause()).orElse(ex));
+    }
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This test indeed passes, so no awkward surprises.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_conclusions">Conclusions</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The primary conclusion is that it&#8217;s actually very easy to define a rule for what the ultimate exception will look like
+in the event of failing pipeline. This rule can be outlined as follows:-</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>"The exception causing the failure will always be wrapped in a CompletionException, except when you observe it in the completion stage immediately following a CompletionFuture on which completeExceptionally has been called, in which case the observed exception will be the one passed to completeExceptionally"</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The significance of this is as follows. In any multi-stage pipeline which does not terminate in thenCompose (which yields
+a new CompletableFuture which can complete exceptionally), you can assume you will always have to unwrap a CompletionException.
+However, where the final stage of the pipeline itself yields a future on which completeExceptionally may be called (true
+for a single step or for a pipeline which ends with thenCompose or one of its async variancts) you may or may not have to
+unwrap a CompletionException.</p>
+</div>
+<div class="paragraph">
+<p>The next article in this series will cover methods for consuming exceptions in these pipelines. The CompletionStage/CompletableFuture
+APIs offer multiple options for doing this.</p>
+</div>
+</div>
+</div>
+</div>
+<div id="footer">
+<div id="footer-text">
+Last updated 2020-09-01 18:00:14 UTC
+</div>
+</div>
+</body>
+</html>
